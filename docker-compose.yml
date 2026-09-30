@@ -1,0 +1,135 @@
+services:
+
+  # -------------------------
+  # PostgreSQL Database
+  # -------------------------
+  postgres:
+    image: postgres:18
+    container_name: hcpcs-postgres
+
+    environment:
+      POSTGRES_DB: hcpcs_db
+      POSTGRES_USER: hcpcs_user
+      POSTGRES_PASSWORD: hcpcs_password
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql
+
+
+  # -------------------------
+  # pgAdmin
+  # -------------------------
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: hcpcs-pgadmin
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@hcpcs.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+
+    ports:
+      - "5050:80"
+
+    depends_on:
+      - postgres
+
+
+  # -------------------------
+  # Metabase
+  # -------------------------
+  metabase:
+    image: metabase/metabase
+    container_name: hcpcs-metabase
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      - postgres
+
+
+  # -------------------------
+  # Airflow Initialization
+  # -------------------------
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+
+    container_name: hcpcs-airflow-init
+
+    depends_on:
+      - postgres
+
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://hcpcs_user:hcpcs_password@postgres:5432/hcpcs_db
+
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - .:/opt/hcpcs-data-engineering
+
+
+  # -------------------------
+  # Airflow Webserver
+  # -------------------------
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+
+    container_name: hcpcs-airflow-webserver
+
+    depends_on:
+      - postgres
+
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://hcpcs_user:hcpcs_password@postgres:5432/hcpcs_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      DB_HOST: postgres
+
+    command: airflow webserver
+
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - .:/opt/hcpcs-data-engineering
+
+
+  # -------------------------
+  # Airflow Scheduler
+  # -------------------------
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+
+    container_name: hcpcs-airflow-scheduler
+
+    depends_on:
+      - postgres
+
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://hcpcs_user:hcpcs_password@postgres:5432/hcpcs_db
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      DB_HOST: postgres
+
+    command: airflow scheduler
+
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - .:/opt/hcpcs-data-engineering
+
+
+# -------------------------
+# PostgreSQL Volume
+# -------------------------
+volumes:
+  postgres_data:
